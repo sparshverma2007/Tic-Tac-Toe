@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tic-Tac-Toe</title>
+<style>
+  :root {
+    --bg1: #e0e7ff;
+    --bg2: #fce7f3;
+    --card: #ffffff;
+    --ink: #1e293b;
+    --muted: #64748b;
+    --x: #4f46e5;
+    --x-bg: #e0e7ff;
+    --o: #db2777;
+    --o-bg: #fce7f3;
+    --win: #d1fae5;
+    --win-ink: #047857;
+    --cell: #f1f5f9;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; margin: 0; }
+  body {
+    background: linear-gradient(135deg, var(--bg1), var(--bg2));
+    background-attachment: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    color: var(--ink);
+    padding: 20px 16px;
+  }
+  .wrap { width: 100%; max-width: 360px; text-align: center; }
+  h1 { margin: 0 0 4px; font-size: 28px; color: #312e81; }
+  .sub { margin: 0 0 18px; font-size: 14px; color: var(--muted); }
+
+  .card {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 12px 30px rgba(49, 46, 129, .15);
+  }
+
+  .scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .score { background: var(--cell); border-radius: 12px; padding: 8px 4px; font-size: 12px; color: var(--muted); }
+  .score b { display: block; font-size: 22px; color: var(--ink); }
+  .score.x b { color: var(--x); }
+  .score.o b { color: var(--o); }
+
+  .status {
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 16px;
+    font-weight: bold;
+    font-size: 16px;
+    background: var(--x-bg);
+    color: var(--x);
+  }
+  .status.o { background: var(--o-bg); color: var(--o); }
+  .status.win { background: var(--win); color: var(--win-ink); }
+  .status.draw { background: #fef3c7; color: #92400e; }
+
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .cell {
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 14px;
+    background: var(--cell);
+    font-size: 48px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform .08s, background .15s;
+  }
+  .cell:hover:not(:disabled) { background: #e2e8f0; }
+  .cell:active:not(:disabled) { transform: scale(.95); }
+  .cell:focus-visible { outline: 3px solid #6366f1; outline-offset: 2px; }
+  .cell:disabled { cursor: default; }
+  .cell.x { color: var(--x); }
+  .cell.o { color: var(--o); }
+  .cell.win { background: var(--win); }
+
+  .buttons { display: flex; gap: 10px; }
+  .btn {
+    flex: 1;
+    border: 0;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform .08s, filter .15s;
+  }
+  .btn:hover { filter: brightness(.95); }
+  .btn:active { transform: scale(.97); }
+  .btn:focus-visible { outline: 3px solid #6366f1; outline-offset: 2px; }
+  .primary { background: #6366f1; color: #fff; }
+  .secondary { background: #e0e7ff; color: #3730a3; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tic-Tac-Toe</h1>
+  <p class="sub">Two players, one device. Get three in a row to win.</p>
+
+  <div class="card">
+    <div class="scores">
+      <div class="score x"><b id="scoreX">0</b>Player X</div>
+      <div class="score"><b id="scoreD">0</b>Draws</div>
+      <div class="score o"><b id="scoreO">0</b>Player O</div>
+    </div>
+
+    <div class="status" id="status" role="status" aria-live="polite">Player X's turn</div>
+
+    <div class="board" id="board"></div>
+
+    <div class="buttons">
+      <button class="btn primary" id="newGame">New game</button>
+      <button class="btn secondary" id="resetScores">Reset scores</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const WIN_LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],   // rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],   // columns
+    [0, 4, 8], [2, 4, 6]               // diagonals
+  ];
+
+  const boardEl = document.getElementById("board");
+  const statusEl = document.getElementById("status");
+  const scores = { X: 0, O: 0, D: 0 };
+
+  let board = Array(9).fill("");
+  let player = "X";
+  let gameOver = false;
+  let startingPlayer = "X";   // alternates each game
+
+  // Create the 9 cells
+  const cells = [];
+  for (let i = 0; i < 9; i++) {
+    const btn = document.createElement("button");
+    btn.className = "cell";
+    btn.setAttribute("aria-label", "Cell " + (i + 1));
+    btn.addEventListener("click", () => play(i));
+    boardEl.appendChild(btn);
+    cells.push(btn);
+  }
+
+  function setStatus(text, type) {
+    statusEl.textContent = text;
+    statusEl.className = "status" + (type ? " " + type : "");
+  }
+
+  function findWinner() {
+    for (const line of WIN_LINES) {
+      const [a, b, c] = line;
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+        return { player: board[a], line };
+      }
+    }
+    return null;
+  }
+
+  function play(i) {
+    if (gameOver || board[i]) return;
+
+    board[i] = player;
+    cells[i].textContent = player;
+    cells[i].classList.add(player.toLowerCase());
+    cells[i].setAttribute("aria-label", "Cell " + (i + 1) + ", " + player);
+
+    const result = findWinner();
+    if (result) {
+      gameOver = true;
+      result.line.forEach((idx) => cells[idx].classList.add("win"));
+      scores[result.player]++;
+      setStatus("Player " + result.player + " wins!", "win");
+      endGame();
+    } else if (board.every((c) => c)) {
+      gameOver = true;
+      scores.D++;
+      setStatus("It's a draw!", "draw");
+      endGame();
+    } else {
+      player = player === "X" ? "O" : "X";
+      setStatus("Player " + player + "'s turn", player === "O" ? "o" : "");
+    }
+  }
+
+  function endGame() {
+    cells.forEach((c) => (c.disabled = true));
+    updateScores();
+  }
+
+  function updateScores() {
+    document.getElementById("scoreX").textContent = scores.X;
+    document.getElementById("scoreO").textContent = scores.O;
+    document.getElementById("scoreD").textContent = scores.D;
+  }
+
+  function newGame() {
+    board = Array(9).fill("");
+    gameOver = false;
+    startingPlayer = startingPlayer === "X" ? "O" : "X";
+    player = startingPlayer;
+    cells.forEach((c, i) => {
+      c.textContent = "";
+      c.className = "cell";
+      c.disabled = false;
+      c.setAttribute("aria-label", "Cell " + (i + 1));
+    });
+    setStatus("Player " + player + "'s turn", player === "O" ? "o" : "");
+  }
+
+  document.getElementById("newGame").addEventListener("click", newGame);
+
+  document.getElementById("resetScores").addEventListener("click", () => {
+    scores.X = scores.O = scores.D = 0;
+    updateScores();
+    startingPlayer = "O";   // newGame() flips it back to X
+    newGame();
+  });
+</script>
+</body>
+</html>
